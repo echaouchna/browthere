@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrowThere</title>
+<meta name="description" content="A tiny macOS app that opens every link in the right browser, profile or Arc space, by rule or from a quick picker.">
+<meta name="theme-color" content="#100e17">
+<link rel="icon" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650;12..96,750&family=Onest:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #100e17;
+  --surface: #1b1826;
+  --raised: #262233;
+  --line: #322c43;
+  --text: #ece8f4;
+  --muted: #9d96ad;
+  --faint: #6f6880;
+  --pink: #ec72d4;
+  --pink-soft: rgba(236, 114, 212, .16);
+  --violet: #a58cf7;
+  --violet-soft: rgba(165, 140, 247, .14);
+  --mint: #8fdc8f;
+  --mint-soft: rgba(143, 220, 143, .14);
+  --amber: #f2c46d;
+
+  --display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --body: "Onest", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+
+  --r-lg: 22px;
+  --r-md: 14px;
+  --r-pill: 999px;
+  --wrap: 1120px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font: 400 17px/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: var(--violet); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--pink); outline-offset: 3px; border-radius: 8px; }
+code, .url { font-family: var(--mono); font-size: .9em; }
+
+.wrap { width: min(var(--wrap), 100% - 32px); margin-inline: auto; }
+
+/* The night sky behind the hero: two soft glows in the brand colors. */
+.sky {
+  position: absolute; inset: 0 0 auto 0; height: 980px; pointer-events: none; z-index: -1;
+  background:
+    radial-gradient(600px 380px at 78% 120px, rgba(236,114,212,.20), transparent 70%),
+    radial-gradient(700px 460px at 12% 40px, rgba(126,92,240,.22), transparent 70%);
+}
+
+/* ---------- Nav ---------- */
+nav { display: flex; align-items: center; gap: 28px; padding: 22px 0; }
+.brand { display: flex; align-items: center; gap: 12px; color: var(--text); font: 650 21px/1 var(--display); }
+.brand:hover { text-decoration: none; }
+.brand img { width: 36px; height: 36px; }
+nav .links { margin-left: auto; display: flex; gap: 26px; }
+nav .links a { color: var(--muted); font-weight: 500; font-size: 15px; }
+nav .links a:hover { color: var(--text); text-decoration: none; }
+
+/* ---------- Buttons & pills (Forge-style) ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 24px; border-radius: var(--r-pill);
+  font: 600 16px/1 var(--body); border: 0; cursor: pointer; text-decoration: none !important;
+}
+.btn-primary { background: var(--pink); color: #1a0b17; box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 32px rgba(236,114,212,.45); }
+.btn-primary:hover { background: #f286de; }
+.btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--line); }
+.btn-ghost:hover { background: var(--raised); }
+.btn svg { width: 18px; height: 18px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: var(--r-pill);
+  font: 500 14px/1.5 var(--body); white-space: nowrap;
+  background: var(--raised); color: var(--text);
+}
+.pill.pink { background: var(--pink-soft); color: var(--pink); }
+.pill.violet { background: var(--violet-soft); color: var(--violet); }
+.pill.mint { background: var(--mint-soft); color: var(--mint); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mint); flex: none; }
+kbd {
+  font: 500 13px/1 var(--body); color: var(--muted);
+  background: var(--raised); border: 1px solid var(--line); border-bottom-width: 2px;
+  padding: 4px 7px; border-radius: 7px;
+}
+
+/* ---------- Avatars ---------- */
+.app {
+  width: 34px; height: 34px; border-radius: 9px; flex: none;
+  display: grid; place-items: center; color: #fff; font: 700 15px/1 var(--display);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+}
+.app.sm { width: 26px; height: 26px; border-radius: 7px; font-size: 12px; }
+.app.helium { background: linear-gradient(140deg, #38c6c0, #1f7fa8); }
+.app.chrome { background: linear-gradient(140deg, #f2b84b, #e0574a 60%, #3f9c5b); }
+.app.arc { background: linear-gradient(140deg, #ff6f91, #6f5cf2); }
+.app.firefox { background: linear-gradient(140deg, #ffbd4f, #ff5a36 55%, #a43bdc); }
+.app.safari { background: linear-gradient(140deg, #61c6ff, #2f6fe8); }
+.app.zen { background: linear-gradient(140deg, #f5e7d0, #c9a77f); color: #3a2a17; }
+.app.figma { background: linear-gradient(140deg, #a259ff, #f24e1e); }
+.app.slack { background: linear-gradient(140deg, #e01e5a, #36c5f0); }
+.app.mail { background: linear-gradient(140deg, #6ec3ff, #2867e6); }
+.app.teams { background: linear-gradient(140deg, #7b83eb, #4b53bc); }
+.app.notes { background: linear-gradient(140deg, #ffe17a, #f5b83d); color: #3b2c06; }
+.face {
+  width: 20px; height: 20px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font: 700 10px/1 var(--body); color: #fff;
+}
+
+/* ---------- Hero ---------- */
+header { position: relative; }
+.hero { padding: 56px 0 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+.hero h1 {
+  margin: 0; max-width: 14ch;
+  font: 750 clamp(46px, 7.6vw, 96px)/.95 var(--display);
+  letter-spacing: -.035em;
+  font-variation-settings: "opsz" 96;
+  padding-bottom: .08em;
+  background: linear-gradient(100deg, var(--text) 10%, #f3c6ea 45%, var(--pink) 75%, var(--violet) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero .lede { max-width: 54ch; margin: 26px 0 0; color: var(--muted); font-size: 19px; }
+.hero .lede strong { color: var(--text); font-weight: 500; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; align-items: center; }
+.cta .note { color: var(--faint); font-size: 14px; margin-left: 6px; }
+
+/* ---------- The routing trace (hero demo) ---------- */
+.trace {
+  position: relative;
+  background: linear-gradient(180deg, rgba(38,34,51,.9), rgba(27,24,38,.92));
+  border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: 0 40px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03) inset;
+  overflow: hidden;
+}
+.trace-top {
+  display: flex; align-items: center; gap: 12px; padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.trace-top .title { font: 650 15px/1 var(--display); letter-spacing: -.01em; }
+.trace-top .tabs { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.trace-top .tabs button {
+  font: 500 13px/1 var(--body); color: var(--muted); cursor: pointer;
+  background: transparent; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 12px;
+}
+.trace-top .tabs button[aria-pressed="true"] { color: var(--pink); border-color: rgba(236,114,212,.5); background: var(--pink-soft); }
+
+.trace-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+.steps { padding: 22px 24px 26px; display: grid; gap: 4px; border-right: 1px solid var(--line); }
+.step {
+  display: grid; grid-template-columns: 28px 1fr; gap: 14px; align-items: start;
+  padding: 12px 0; opacity: .32; transition: opacity .35s ease;
+}
+.step.on { opacity: 1; }
+.step .rail { display: grid; justify-items: center; height: 100%; }
+.step .node {
+  width: 14px; height: 14px; border-radius: 50%; margin-top: 4px;
+  border: 2px solid var(--faint); background: var(--ink); transition: all .3s ease;
+}
+.step.on .node { border-color: var(--pink); background: var(--pink); box-shadow: 0 0 14px rgba(236,114,212,.8); }
+.step.done .node { border-color: var(--mint); background: var(--mint); box-shadow: 0 0 14px rgba(143,220,143,.6); }
+.step .stem { width: 2px; flex: 1; background: var(--line); margin-top: 6px; min-height: 18px; }
+.step:last-child .stem { display: none; }
+.step h3 { margin: 0 0 8px; font: 600 15px/1.3 var(--body); color: var(--muted); }
+.step.on h3 { color: var(--text); }
+.step .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.url-line {
+  font: 400 14.5px/1.55 var(--mono); color: var(--text);
+  word-break: break-all; min-height: 1.55em;
+}
+.url-line .gone { color: var(--pink); text-decoration: line-through; text-decoration-thickness: 2px; transition: opacity .5s ease, max-width .6s ease; }
+.url-line .gone.fade { opacity: 0; }
+.url-line .host { color: var(--violet); }
+.caret { display: inline-block; width: 8px; height: 1.1em; vertical-align: -3px; background: var(--pink); margin-left: 1px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Right side: the rule list, lighting up as it is checked. */
+.rules-side { padding: 22px 24px 26px; display: flex; flex-direction: column; gap: 10px; }
+.rules-side h3 { margin: 0 0 4px; font: 600 15px/1.3 var(--body); color: var(--muted); display: flex; justify-content: space-between; }
+.rule {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: var(--r-md);
+  background: rgba(16,14,23,.55); border: 1px solid var(--line);
+  transition: border-color .25s ease, background .25s ease, transform .25s ease, opacity .25s ease;
+}
+.rule .cond { flex: 1; min-width: 0; font: 400 13.5px/1.35 var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule .cond b { color: var(--text); font-weight: 500; }
+.rule .to { font-size: 13.5px; color: var(--muted); white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.rule.checking { border-color: rgba(165,140,247,.55); background: var(--violet-soft); }
+.rule.miss { opacity: .45; }
+.rule.hit { border-color: var(--pink); background: var(--pink-soft); transform: translateX(4px); box-shadow: 0 0 24px rgba(236,114,212,.25); }
+.rule.hit .cond b { color: var(--pink); }
+.rule.fallback .cond { font-family: var(--body); }
+
+.landing {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+  border-radius: var(--r-md); background: rgba(16,14,23,.6); border: 1px solid var(--line);
+  transition: border-color .3s ease, box-shadow .3s ease;
+}
+.landing.lit { border-color: rgba(143,220,143,.55); box-shadow: 0 0 30px rgba(143,220,143,.12); }
+.landing .who { font-weight: 600; }
+.landing .sub { color: var(--muted); font-size: 14px; }
+.landing .state { margin-left: auto; }
+
+.try {
+  display: flex; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--line); align-items: center;
+}
+.try label { color: var(--muted); font-size: 14px; white-space: nowrap; }
+.try input {
+  flex: 1; min-width: 0; background: var(--ink); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 10px 16px;
+  font: 400 14px/1.2 var(--mono);
+}
+.try input::placeholder { color: var(--faint); }
+.try input:focus { outline: none; border-color: var(--pink); box-shadow: 0 0 0 3px var(--pink-soft); }
+
+/* ---------- Strip of browsers ---------- */
+.browsers { padding: 30px 0 10px; }
+.browsers p { color: var(--faint); font-size: 14px; margin: 0 0 14px; }
+.browsers ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.browsers li { display: flex; align-items: center; gap: 9px; padding: 6px 14px 6px 6px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--line); font-size: 15px; }
+
+/* ---------- Feature sections ---------- */
+section.feature { padding: 110px 0 0; }
+.feature .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 64px; align-items: center; }
+.feature.flip .grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.feature.flip .copy { order: 2; }
+.feature h2 {
+  margin: 0 0 16px; font: 650 clamp(32px, 4.2vw, 50px)/1.04 var(--display); letter-spacing: -.028em;
+  font-variation-settings: "opsz" 72;
+}
+.feature .copy p { color: var(--muted); margin: 0 0 18px; max-width: 46ch; }
+.feature .copy ul { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 12px; max-width: 46ch; }
+.feature .copy li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; color: var(--text); }
+.feature .copy li::before { content: ""; width: 8px; height: 8px; margin-top: 9px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 10px rgba(236,114,212,.7); }
+.feature .copy li span { color: var(--muted); }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: 0 30px 80px rgba(0,0,0,.4);
+}
+
+/* Profiles panel */
+.profiles { padding: 10px; }
+.profiles .browser { padding: 12px 12px 6px; }
+.profiles .browser + .browser { border-top: 1px solid var(--line); }
+.profiles .head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.profiles .head b { font-weight: 600; }
+.profiles .head .count { margin-left: auto; color: var(--faint); font-size: 14px; }
+.profiles .list { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 8px 46px; }
+.profiles .list .pill { background: var(--ink); border: 1px solid var(--line); padding: 4px 12px 4px 5px; }
+.profiles .list .pill small { color: var(--faint); font-size: 13px; }
+
+/* Rule editor panel */
+.editor { padding: 22px; display: grid; gap: 16px; }
+.editor .field { display: grid; gap: 8px; }
+.editor .field > span { color: var(--muted); font-size: 14px; }
+.editor .cond-row { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: center; }
+.select, .input {
+  background: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 12px; font-size: 14.5px; color: var(--text); white-space: nowrap;
+}
+.select::after { content: " ⌄"; color: var(--faint); }
+.input { font-family: var(--mono); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; }
+.editor .target { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-md); }
+.editor .target .sub { color: var(--muted); font-size: 14px; }
+.editor .target .change { margin-left: auto; }
+.switch { width: 40px; height: 24px; border-radius: 12px; background: var(--line); position: relative; flex: none; cursor: pointer; border: 0; transition: background .2s ease; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s ease; }
+.switch[aria-checked="true"] { background: var(--pink); }
+.switch[aria-checked="true"]::after { transform: translateX(16px); }
+.editor .toggle-row { display: flex; align-items: center; gap: 12px; }
+.editor .toggle-row div { flex: 1; }
+.editor .toggle-row small { display: block; color: var(--muted); font-size: 13.5px; }
+.editor .test { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--mint-soft); color: var(--mint); font-size: 14px; }
+
+/* Picker panel (Raycast-style) */
+.picker { overflow: hidden; background: rgba(27,24,38,.96); backdrop-filter: blur(20px); }
+.picker .search { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.picker .search svg { width: 18px; height: 18px; color: var(--faint); flex: none; }
+.picker .search input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); font: 400 18px/1.2 var(--body); }
+.picker .search input:focus { outline: none; }
+.picker .search input::placeholder { color: var(--faint); }
+.picker .group { padding: 10px 10px 6px; }
+.picker .group > span { display: block; padding: 2px 10px 8px; color: var(--faint); font-size: 13px; }
+.picker .opt { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 11px; cursor: pointer; }
+.picker .opt.sel { background: var(--raised); box-shadow: inset 0 0 0 1px rgba(236,114,212,.35); }
+.picker .opt .t { font-weight: 500; }
+.picker .opt .s { color: var(--muted); font-size: 14px; }
+.picker .opt kbd { margin-left: auto; }
+.picker .empty { padding: 18px 20px 24px; color: var(--muted); font-size: 15px; }
+.picker .foot { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; white-space: nowrap; }
+.picker .foot .link { font-family: var(--mono); font-size: 12.5px; color: var(--faint); margin-right: auto; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.picker .foot span { display: inline-flex; gap: 6px; align-items: center; }
+.picker .foot .main { color: var(--text); }
+
+/* Cleaner panel */
+.cleaner { padding: 22px; display: grid; gap: 14px; }
+.cleaner .examples { display: flex; gap: 8px; flex-wrap: wrap; }
+.cleaner .examples button { font: 500 13.5px/1 var(--body); color: var(--muted); background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 8px 13px; cursor: pointer; }
+.cleaner .examples button[aria-pressed="true"] { color: var(--violet); border-color: rgba(165,140,247,.5); background: var(--violet-soft); }
+.cleaner .box { background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; }
+.cleaner .box small { display: block; color: var(--faint); font-size: 13px; margin-bottom: 6px; }
+.cleaner .box .url-line { font-size: 13.5px; }
+.cleaner .box.after { border-color: rgba(143,220,143,.4); }
+.cleaner .box.after .url-line { color: var(--mint); }
+.cleaner .tags { display: flex; gap: 8px; flex-wrap: wrap; min-height: 30px; }
+
+/* Lightweight: an Activity Monitor row */
+.monitor { overflow: hidden; }
+.monitor table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.monitor th { text-align: left; color: var(--faint); font-weight: 500; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.monitor td { padding: 12px 18px; border-bottom: 1px solid rgba(50,44,67,.6); color: var(--muted); }
+.monitor tr:last-child td { border-bottom: 0; }
+.monitor td.num, .monitor th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.monitor tr.me td { color: var(--text); background: var(--pink-soft); }
+.monitor tr.me td:first-child { display: flex; align-items: center; gap: 10px; }
+.monitor tr.me img { width: 20px; height: 20px; }
+.monitor .cap { padding: 12px 18px; color: var(--faint); font-size: 13px; border-top: 1px solid var(--line); }
+
+/* ---------- Install ---------- */
+section.install { padding: 120px 0 0; }
+.install .card { padding: 44px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 48px; align-items: start; position: relative; overflow: hidden; }
+.install .card::before { content: ""; position: absolute; width: 520px; height: 520px; right: -160px; top: -260px; background: radial-gradient(closest-side, rgba(236,114,212,.25), transparent); pointer-events: none; }
+.install h2 { margin: 0 0 14px; font: 650 clamp(32px, 4vw, 48px)/1.04 var(--display); letter-spacing: -.028em; }
+.install p { color: var(--muted); margin: 0 0 26px; max-width: 40ch; }
+.install ol { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; gap: 18px; position: relative; }
+.install li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 14px; }
+.install li::before { content: counter(s); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--raised); border: 1px solid var(--line); font: 600 14px/1 var(--display); color: var(--pink); }
+.install li b { display: block; font-weight: 600; margin-top: 3px; }
+.install li span { color: var(--muted); font-size: 15px; }
+.install li code { background: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 2px 7px; color: var(--text); font-size: 13px; word-break: break-all; }
+
+footer { padding: 90px 0 50px; color: var(--faint); font-size: 14px; display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+footer .brand { font-size: 16px; }
+footer .brand img { width: 26px; height: 26px; }
+footer .right { margin-left: auto; display: flex; gap: 20px; }
+footer a { color: var(--muted); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .trace-body { grid-template-columns: minmax(0, 1fr); }
+  .steps { border-right: 0; border-bottom: 1px solid var(--line); }
+  .feature .grid, .feature.flip .grid, .install .card { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .feature.flip .copy { order: 0; }
+  section.feature { padding-top: 80px; }
+  .install .card { padding: 28px; }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  nav .links a:not(.gh) { display: none; }
+  .hero { padding-top: 28px; }
+  .cta .note { margin-left: 0; }
+  .trace-top .tabs button { padding: 6px 10px; }
+  .profiles .list { padding-left: 0; }
+  .trace-top { flex-wrap: wrap; }
+  .trace-top .tabs { margin-left: 0; justify-content: flex-start; }
+  .try { flex-wrap: wrap; }
+  .try label { width: 100%; }
+  .rule .to .name { display: none; }
+  .editor .cond-row { grid-template-columns: 1fr 1fr; }
+  .editor .cond-row .input { grid-column: 1 / -1; }
+  .picker .opt kbd, .picker .foot .link { display: none; }
+  .picker .foot { flex-wrap: wrap; }
+}
+.still *, .still *::before, .still *::after { transition: none !important; animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true"></div>
+
+<header>
+  <div class="wrap">
+    <nav aria-label="Main">
+      <a class="brand" href="#"><img src="assets/icon.png" alt="">BrowThere</a>
+      <div class="links">
+        <a href="#profiles">Profiles</a>
+        <a href="#rules">Rules</a>
+        <a href="#picker">Picker</a>
+        <a href="#cleaning">Clean links</a>
+        <a class="gh" href="https://github.com/echaouchna/browthere">GitHub</a>
+      </div>
+    </nav>
+
+    <div class="hero">
+      <div>
+        <h1>Every link, right where it belongs.</h1>
+        <p class="lede">BrowThere sits between your apps and your browsers. Click a link in Slack, Mail or Teams and it opens in <strong>the right browser, profile or Arc space</strong>, picked by your rules or from a picker you call up with <kbd>⌥</kbd>.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/echaouchna/browthere/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></svg>
+            Download for macOS
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/echaouchna/browthere">View the source</a>
+          <span class="note">Free and open source. Needs macOS 14 or later.</span>
+        </div>
+      </div>
+
+      <div class="trace" id="trace" aria-label="Live demo of a link being routed">
+        <div class="trace-top">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="title">Routing a link</span>
+          <div class="tabs" role="group" aria-label="Example links"></div>
+        </div>
+        <div class="trace-body">
+          <div class="steps">
+            <div class="step" data-step="0">
+              <div class="rail"><span class="node"></span><span class="stem"></span></div>
+              <div>
+                <h3 id="from-label">Clicked in Slack</h3>
+                <div class="url-line" id="url-in"></div>
+              </div>
+            </div>
+            <div class="step" data-step="1">
+              <div class="rail"><span class="node"></span><span class="stem"></span></div>
+              <div>
+                <h3>Cleaned</h3>
+                <div class="row" id="clean-tags"></div>
+              </div>
+            </div>
+            <div class="step" data-step="2">
+              <div class="rail"><span class="node"></span><span class="stem"></span></div>
+              <div>
+                <h3>Matched a rule</h3>
+                <div class="row" id="rule-tag"></div>
+              </div>
+            </div>
+            <div class="step" data-step="3">
+              <div class="rail"><span class="node"></span><span class="stem"></span></div>
+              <div>
+                <h3>Opened</h3>
+                <div class="landing" id="landing">
+                  <span class="app" id="land-app">·</span>
+                  <div><div class="who" id="land-who">Waiting for a link</div><div class="sub" id="land-sub">&nbsp;</div></div>
+                  <span class="pill mint state" id="land-state" hidden><span class="dot"></span>Opened</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="rules-side">
+            <h3><span>Your rules</span><span style="color:var(--faint);font-weight:400">first match wins</span></h3>
+            <div id="rule-list"></div>
+          </div>
+        </div>
+        <form class="try" id="try-form" autocomplete="off" novalidate>
+          <label for="try-input">Try your own link</label>
+          <input id="try-input" type="url" inputmode="url" spellcheck="false" placeholder="https://youtu.be/dQw4w9WgXcQ?si=share123">
+          <button class="btn btn-ghost" type="submit" style="padding:10px 18px;font-size:14px">Route it</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="browsers">
+      <p>Finds the profiles in the browsers you already use</p>
+      <ul>
+        <li><span class="app sm chrome">C</span>Chrome</li>
+        <li><span class="app sm helium">H</span>Helium</li>
+        <li><span class="app sm arc">A</span>Arc spaces</li>
+        <li><span class="app sm firefox">F</span>Firefox</li>
+        <li><span class="app sm zen">Z</span>Zen</li>
+        <li><span class="app sm" style="background:linear-gradient(140deg,#fb542b,#c2290f)">B</span>Brave</li>
+        <li><span class="app sm" style="background:linear-gradient(140deg,#2bc3d2,#1460c9)">E</span>Edge</li>
+        <li><span class="app sm" style="background:linear-gradient(140deg,#ef4b4b,#a01d1d)">V</span>Vivaldi</li>
+        <li><span class="app sm safari">S</span>Safari</li>
+      </ul>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="feature" id="profiles">
+    <div class="wrap grid">
+      <div class="copy">
+        <h2>Profiles, not just browsers.</h2>
+        <p>Work account in one Chrome profile, personal in another, a client in Helium? BrowThere reads the profiles you already have, with their names, emails and colors, and treats each one as a destination.</p>
+        <ul>
+          <li><span><b style="color:var(--text);font-weight:500">Found for you</b> in Chrome, Edge, Brave, Vivaldi, Helium and other Chromium browsers, and in Firefox, Zen and other Gecko browsers.</span></li>
+          <li><span><b style="color:var(--text);font-weight:500">Arc spaces</b> show up like profiles, and links open as a new tab in that space.</span></li>
+          <li><span><b style="color:var(--text);font-weight:500">Anything else</b> can be added by hand, with a profile folder, a profile name or your own launch arguments.</span></li>
+        </ul>
+      </div>
+      <div class="panel profiles" aria-label="Example of detected profiles">
+        <div class="browser">
+          <div class="head"><span class="app chrome">C</span><b>Google Chrome</b><span class="count">3 profiles</span></div>
+          <div class="list">
+            <span class="pill"><span class="face" style="background:#4f7cf0">W</span>Work <small>alex@acme.io</small></span>
+            <span class="pill"><span class="face" style="background:#e5739a">P</span>Personal <small>alex@gmail.com</small></span>
+            <span class="pill"><span class="face" style="background:#3fae7c">C</span>Client</span>
+          </div>
+        </div>
+        <div class="browser">
+          <div class="head"><span class="app arc">A</span><b>Arc</b><span class="count">3 spaces</span></div>
+          <div class="list">
+            <span class="pill"><span class="face" style="background:#8a6cf2">R</span>Research</span>
+            <span class="pill"><span class="face" style="background:#f08a4b">S</span>Side project</span>
+            <span class="pill"><span class="face" style="background:#46a4e8">H</span>Home</span>
+          </div>
+        </div>
+        <div class="browser">
+          <div class="head"><span class="app firefox">F</span><b>Firefox</b><span class="count">2 profiles</span></div>
+          <div class="list">
+            <span class="pill"><span class="face" style="background:#d9534f">D</span>dev-edition</span>
+            <span class="pill"><span class="face" style="background:#7a8699">T</span>testing</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature flip" id="rules">
+    <div class="wrap grid">
+      <div class="copy">
+        <h2>Rules that read like sentences.</h2>
+        <p>Match a domain, a domain plus a path like <code>gitlab.com/my-group</code>, the full URL, a wildcard or a regex, or the app the link came from. Combine conditions, then send matches to any browser, profile, space or app.</p>
+        <ul>
+          <li><span>Rules are checked from the top, and the first match wins.</span></li>
+          <li><span>Open matches in a private window, in Zoom, Figma or Slack, or show the picker.</span></li>
+          <li><span>Paste any link into the built-in tester to see which rule catches it.</span></li>
+        </ul>
+      </div>
+      <div class="panel editor" aria-label="Example rule">
+        <div class="field">
+          <span>When a link</span>
+          <div class="cond-row"><span class="select">Site</span><span class="select">is or is under</span><span class="input">gitlab.com/my-group</span></div>
+          <div class="cond-row"><span class="select">Source app</span><span class="select">is</span><span class="input" style="font-family:var(--body)">Slack</span></div>
+        </div>
+        <div class="field">
+          <span>Open it in</span>
+          <div class="target"><span class="app chrome">C</span><div><div style="font-weight:600">Google Chrome</div><div class="sub">Work · alex@acme.io</div></div><span class="pill change">Change</span></div>
+        </div>
+        <div class="toggle-row">
+          <div>Private window<small>Open matching links in an incognito or private window.</small></div>
+          <button class="switch" role="switch" aria-checked="false" aria-label="Private window" id="private-switch"></button>
+        </div>
+        <div class="test"><span class="dot"></span><span class="url">gitlab.com/my-group/api/-/merge_requests/12</span> matches</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature" id="picker">
+    <div class="wrap grid">
+      <div class="copy">
+        <h2>Hold ⌥ and choose.</h2>
+        <p>No rule for it, or want somewhere else this once? Option-click any link and a command bar drops in. Type to filter by browser, profile or email, then press return.</p>
+        <ul>
+          <li><span><kbd>⌘1</kbd>–<kbd>⌘9</kbd> pick straight away, <kbd>↑</kbd><kbd>↓</kbd> and <kbd>↩</kbd> select.</span></li>
+          <li><span><kbd>⇧↩</kbd> opens a private window.</span></li>
+          <li><span><kbd>⌘↩</kbd> always opens this site there, by writing the rule for you.</span></li>
+        </ul>
+      </div>
+      <div class="panel picker" id="picker-demo" aria-label="Interactive picker">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="picker-input" placeholder="Open in…" aria-label="Filter browsers and profiles" spellcheck="false">
+          <span class="pill violet">figma.com</span>
+        </div>
+        <div class="group"><span>Browsers &amp; profiles</span><div id="picker-list" role="listbox" aria-label="Destinations"></div></div>
+        <div class="foot">
+          <span class="link">figma.com/design/Kq3…/Onboarding</span>
+          <span class="main" id="picker-main">Open in Chrome <kbd>↩</kbd></span>
+          <span>Private <kbd>⇧↩</kbd></span>
+          <span>Always here <kbd>⌘↩</kbd></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature flip" id="cleaning">
+    <div class="wrap grid">
+      <div class="copy">
+        <h2>Links arrive clean.</h2>
+        <p>Before anything opens, BrowThere unwraps redirect links so your rules see the real site, and drops tracking parameters you never asked for.</p>
+        <ul>
+          <li><span>Unwraps Outlook and Teams Safe Links, plus Google, Facebook, Instagram, Slack, LinkedIn and YouTube redirects.</span></li>
+          <li><span>Strips <code>utm_*</code>, <code>fbclid</code>, <code>gclid</code>, YouTube's <code>si</code> and more.</span></li>
+          <li><span>Add your own: a name, a <code>prefix*</code>, or <code>domain:name</code> for one site.</span></li>
+        </ul>
+      </div>
+      <div class="panel cleaner" aria-label="Link cleaning examples">
+        <div class="examples" role="group" aria-label="Examples" id="clean-examples"></div>
+        <div class="box"><small>You clicked</small><div class="url-line" id="clean-before"></div></div>
+        <div class="box after"><small>BrowThere opens</small><div class="url-line" id="clean-after"></div></div>
+        <div class="tags" id="clean-why"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature" id="light">
+    <div class="wrap grid">
+      <div class="copy">
+        <h2>So light you'll forget it's running.</h2>
+        <p>BrowThere is native Swift, with no web view and no timers running in the background. It waits for a link, routes it in a few milliseconds, and goes back to sleep. The whole app is a 2 MB download.</p>
+        <ul>
+          <li><span>Opens at login and stays out of the way in the menu bar, or hidden entirely.</span></li>
+          <li><span>A link that's already open in a profile lands as a tab in that window, not a new one.</span></li>
+        </ul>
+      </div>
+      <div class="panel monitor" aria-label="BrowThere's measured resource use">
+        <table>
+          <thead><tr><th colspan="2"><span style="display:flex;align-items:center;gap:10px;color:var(--text)"><img src="assets/icon.png" alt="" style="width:20px;height:20px">BrowThere at rest</span></th></tr></thead>
+          <tbody>
+            <tr class="me"><td>Memory</td><td class="num">18 MB</td></tr>
+            <tr><td>CPU</td><td class="num">0.0 %</td></tr>
+            <tr><td>Threads</td><td class="num">3</td></tr>
+            <tr><td>Download</td><td class="num">2 MB</td></tr>
+          </tbody>
+        </table>
+        <div class="cap">Measured on an Apple Silicon Mac, a few seconds after routing a link.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="install" id="install">
+    <div class="wrap">
+      <div class="panel card">
+        <div>
+          <h2>Set it up in a minute.</h2>
+          <p>Download the latest release, then make BrowThere your default browser. It hands every link to the browser you'd have picked yourself.</p>
+          <div class="cta" style="margin-top:0">
+            <a class="btn btn-primary" href="https://github.com/echaouchna/browthere/releases/latest">Download for macOS</a>
+          </div>
+        </div>
+        <ol>
+          <li><div><b>Move it to Applications</b><span>Unzip the download and drag BrowThere into your Applications folder.</span></div></li>
+          <li><div><b>Allow it the first time</b><span>If macOS says it can't be verified, open System Settings, then Privacy &amp; Security, and click Open Anyway. Or run <code>xattr -dr com.apple.quarantine /Applications/BrowThere.app</code></span></div></li>
+          <li><div><b>Make it your default browser</b><span>Open BrowThere and click Make Default. Your current browser becomes the fallback.</span></div></li>
+          <li><div><b>Add your first rule</b><span>Or just hold ⌥ on your next link and press ⌘↩ to remember the choice.</span></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="wrap">
+  <footer>
+    <a class="brand" href="#"><img src="assets/icon.png" alt="">BrowThere</a>
+    <span>Open source under the MIT License.</span>
+    <div class="right">
+      <a href="https://github.com/echaouchna/browthere">GitHub</a>
+      <a href="https://github.com/echaouchna/browthere/releases">Releases</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  // ?still renders finished states with no motion (used for the README preview).
+  const still = new URLSearchParams(location.search).has("still");
+  if (still) document.documentElement.classList.add("still");
+  const reduce = still || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, reduce ? 0 : ms));
+
+  /* ---------- A tiny copy of BrowThere's routing ---------- */
+  const DEST = {
+    work:     { app: "chrome",  letter: "C", who: "Google Chrome", sub: "Work · alex@acme.io" },
+    helium:   { app: "helium",  letter: "H", who: "Helium", sub: "Client profile" },
+    research: { app: "arc",     letter: "A", who: "Arc", sub: "Research space" },
+    figma:    { app: "figma",   letter: "F", who: "Figma", sub: "Desktop app" },
+    personal: { app: "firefox", letter: "F", who: "Firefox", sub: "Personal · fallback" },
+  };
+  const RULES = [
+    { label: "<b>gitlab.com/my-group</b>", test: (u) => site(u, "gitlab.com", "/my-group"), to: "work" },
+    { label: "<b>tickets.example.com</b>", test: (u) => site(u, "tickets.example.com"), to: "helium" },
+    { label: "path contains <b>/papers/</b>", test: (u) => u.pathname.toLowerCase().includes("/papers/"), to: "research" },
+    { label: "<b>figma.com</b>", test: (u) => site(u, "figma.com"), to: "figma" },
+  ];
+  function site(u, host, path = "") {
+    const h = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (h !== host && !h.endsWith("." + host)) return false;
+    if (!path) return true;
+    const p = u.pathname.toLowerCase();
+    return p === path || p.startsWith(path + "/");
+  }
+  const TRACKERS = /^(utm_.*|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|igshid|_hsenc|_hsmi|yclid|ttclid|twclid|ref_src)$/i;
+  function isYouTube(u) { return /(^|\.)(youtube\.com|youtu\.be)$/i.test(u.hostname); }
+
+  // Returns { final: URL, unwrapped: host|null, removed: [names] }
+  function clean(raw) {
+    let u = new URL(raw);
+    let unwrapped = null;
+    const redirect = /safelinks/i.test(u.hostname + u.pathname) ? "url"
+      : /(^|\.)google\.[a-z.]+$/i.test(u.hostname) && u.pathname === "/url" ? "q"
+      : /^l\.facebook\.com$/i.test(u.hostname) ? "u" : null;
+    if (redirect && u.searchParams.get(redirect)) {
+      try { const inner = new URL(u.searchParams.get(redirect)); unwrapped = u.hostname; u = inner; } catch {}
+    }
+    const removed = [];
+    for (const k of [...u.searchParams.keys()]) {
+      if (TRACKERS.test(k) || (isYouTube(u) && /^(si|is)$/i.test(k))) { removed.push(k); }
+    }
+    removed.forEach((k) => u.searchParams.delete(k));
+    return { final: u, unwrapped, removed };
+  }
+  function route(u) {
+    const i = RULES.findIndex((r) => r.test(u));
+    return { index: i, dest: DEST[i < 0 ? "personal" : RULES[i].to] };
+  }
+
+  /* ---------- Hero trace ---------- */
+  const EXAMPLES = [
+    { tab: "Teams Safe Link", from: "Teams", url: "https://teams.cdn.office.net/evergreen-assets/safelinks/1/atp-safelinks.html?url=https%3A%2F%2Ftickets.example.com%2Fticket%2F4182%3Futm_source%3Dteams" },
+    { tab: "GitLab MR", from: "Slack", url: "https://gitlab.com/my-group/api/-/merge_requests/12?utm_medium=chat" },
+    { tab: "YouTube share", from: "Messages", url: "https://youtu.be/dQw4w9WgXcQ?si=Hx81kWq_share&t=42" },
+    { tab: "Arc space", from: "Mail", url: "https://arxiv.org/papers/2410.01234?fbclid=IwAR3x" },
+    { tab: "Figma file", from: "Slack", url: "https://www.figma.com/design/Kq3vZ/Onboarding?node-id=12-4" },
+  ];
+  const trace = $("#trace");
+  const steps = [...trace.querySelectorAll(".step")];
+  const tabs = $(".tabs", trace);
+  const urlIn = $("#url-in"), cleanTags = $("#clean-tags"), ruleTag = $("#rule-tag");
+  const ruleList = $("#rule-list");
+  const land = { box: $("#landing"), app: $("#land-app"), who: $("#land-who"), sub: $("#land-sub"), state: $("#land-state") };
+
+  ruleList.innerHTML = RULES.map((r) => `
+    <div class="rule"><span class="cond">${r.label}</span><span class="to"><span class="app sm ${DEST[r.to].app}">${DEST[r.to].letter}</span><span class="name">${DEST[r.to].sub.split(" · ")[0]}</span></span></div>`).join("")
+    + `<div class="rule fallback"><span class="cond">Everything else</span><span class="to"><span class="app sm firefox">F</span><span class="name">Personal</span></span></div>`;
+  ruleList.style.display = "grid"; ruleList.style.gap = "10px";
+  const ruleEls = [...ruleList.children];
+
+  EXAMPLES.forEach((ex, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = ex.tab;
+    b.addEventListener("click", () => { auto = false; play(ex); });
+    tabs.appendChild(b);
+  });
+
+  let run = 0, auto = true;
+
+  function markUrl(raw, res) {
+    // Highlight the host, and strike the parameters that will be removed. A wrapped link's
+    // inner parameters are encoded, so only its outer host is marked (the tags explain the rest).
+    const q = raw.indexOf("?");
+    const base = q < 0 ? raw : raw.slice(0, q);
+    const host = new URL(raw).hostname;
+    let html = esc(base).replace(esc(host), `<span class="host">${esc(host)}</span>`);
+    if (q < 0) return html;
+    const parts = raw.slice(q + 1).split("&").map((kv) => {
+      const k = decodeURIComponent(kv.split("=")[0]);
+      return !res.unwrapped && res.removed.includes(k) ? `<span class="gone">${esc(kv)}</span>` : esc(kv);
+    });
+    return html + "?" + parts.join("&amp;");
+  }
+
+  async function play(ex) {
+    const id = ++run;
+    const live = () => id === run;
+    [...tabs.children].forEach((b, i) => b.setAttribute("aria-pressed", EXAMPLES[i] === ex));
+    steps.forEach((s) => s.classList.remove("on", "done"));
+    ruleEls.forEach((r) => r.classList.remove("checking", "miss", "hit"));
+    cleanTags.innerHTML = ""; ruleTag.innerHTML = "";
+    land.box.classList.remove("lit"); land.state.hidden = true;
+    land.app.className = "app"; land.app.textContent = "·"; land.who.textContent = "Waiting for a link"; land.sub.innerHTML = "&nbsp;";
+    $("#from-label").textContent = ex.from ? `Clicked in ${ex.from}` : "Your link";
+
+    let res;
+    try { res = clean(ex.url); } catch { res = null; }
+    if (!res || /\s/.test(ex.url) || !res.final.hostname.includes(".")) {
+      urlIn.textContent = "That doesn't look like a web link. Try something like youtu.be/dQw4w9WgXcQ?si=abc";
+      steps[0].classList.add("on");
+      return;
+    }
+
+    // 1. The link arrives, typed out.
+    steps[0].classList.add("on");
+    const text = ex.url;
+    const per = Math.max(6, Math.min(18, 1400 / text.length));
+    for (let i = 1; i <= text.length; i += reduce ? text.length : 2) {
+      if (!live()) return;
+      urlIn.innerHTML = esc(text.slice(0, i)) + '<span class="caret"></span>';
+      await sleep(per);
+    }
+    urlIn.innerHTML = markUrl(text, res);
+    await sleep(500); if (!live()) return;
+    steps[0].classList.add("done");
+
+    // 2. Cleaning.
+    steps[1].classList.add("on");
+    const tags = [];
+    if (res.unwrapped) tags.push(`<span class="pill violet">#unwrapped ${esc(res.unwrapped.split(".").slice(-2).join("."))}</span>`);
+    res.removed.forEach((k) => tags.push(`<span class="pill pink">#removed ${esc(k)}</span>`));
+    if (!tags.length) tags.push(`<span class="pill">already clean</span>`);
+    for (const t of tags) { if (!live()) return; cleanTags.insertAdjacentHTML("beforeend", t); await sleep(220); }
+    trace.querySelectorAll(".url-line .gone").forEach((g) => g.classList.add("fade"));
+    await sleep(450); if (!live()) return;
+    urlIn.innerHTML = `<span class="host">${esc(res.final.hostname)}</span>${esc(res.final.href.slice(res.final.origin.length))}`;
+    steps[1].classList.add("done");
+
+    // 3. Rules, checked top to bottom.
+    steps[2].classList.add("on");
+    const { index, dest } = route(res.final);
+    const last = index < 0 ? ruleEls.length - 1 : index;
+    for (let i = 0; i <= last; i++) {
+      if (!live()) return;
+      ruleEls[i].classList.add("checking");
+      await sleep(300);
+      ruleEls[i].classList.remove("checking");
+      ruleEls[i].classList.add(i === last ? "hit" : "miss");
+    }
+    ruleTag.innerHTML = index < 0
+      ? `<span class="pill">no rule, so the fallback</span>`
+      : `<span class="pill pink">${RULES[index].label.replace(/<\/?b>/g, "")}</span>`;
+    await sleep(350); if (!live()) return;
+    steps[2].classList.add("done");
+
+    // 4. Opened.
+    steps[3].classList.add("on");
+    land.app.className = `app ${dest.app}`; land.app.textContent = dest.letter;
+    land.who.textContent = dest.who; land.sub.textContent = dest.sub;
+    land.box.classList.add("lit"); land.state.hidden = false;
+    steps[3].classList.add("done");
+
+    // Without motion, stay on this example; the tabs above still switch between them.
+    if (reduce) return;
+    await sleep(3200);
+    if (live() && auto && !trace.matches(":hover")) {
+      const next = EXAMPLES[(EXAMPLES.indexOf(ex) + 1) % EXAMPLES.length];
+      if (next) play(next);
+    } else if (live() && auto) {
+      trace.addEventListener("mouseleave", () => { if (live() && auto) play(EXAMPLES[(EXAMPLES.indexOf(ex) + 1) % EXAMPLES.length]); }, { once: true });
+    }
+  }
+
+  $("#try-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    let v = $("#try-input").value.trim();
+    if (!v) v = $("#try-input").placeholder;
+    if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+    auto = false;
+    play({ from: "", url: v });
+  });
+
+  // Start when the demo is on screen, so the first thing visitors see is a link moving.
+  new IntersectionObserver((entries, obs) => {
+    if (entries.some((e) => e.isIntersecting)) { if (run === 0) play(EXAMPLES[0]); obs.disconnect(); }
+  }, { threshold: .25 }).observe(trace);
+
+  /* ---------- Picker ---------- */
+  const OPTIONS = [
+    { app: "chrome", l: "C", t: "Google Chrome", s: "Work · alex@acme.io" },
+    { app: "chrome", l: "C", t: "Google Chrome", s: "Personal · alex@gmail.com" },
+    { app: "arc", l: "A", t: "Arc", s: "Research" },
+    { app: "arc", l: "A", t: "Arc", s: "Side project" },
+    { app: "helium", l: "H", t: "Helium", s: "Client" },
+    { app: "firefox", l: "F", t: "Firefox", s: "dev-edition" },
+    { app: "figma", l: "F", t: "Figma", s: "Desktop app" },
+  ];
+  const pInput = $("#picker-input"), pList = $("#picker-list"), pMain = $("#picker-main");
+  let shown = OPTIONS, sel = 0;
+  function renderPicker() {
+    const q = pInput.value.toLowerCase().split(/\s+/).filter(Boolean);
+    shown = OPTIONS.filter((o) => q.every((w) => (o.t + " " + o.s).toLowerCase().includes(w)));
+    sel = Math.min(sel, Math.max(0, shown.length - 1));
+    pList.innerHTML = shown.length ? shown.map((o, i) => `
+      <div class="opt${i === sel ? " sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}">
+        <span class="app sm ${o.app}">${o.l}</span><span class="t">${o.t}</span><span class="s">${o.s}</span><kbd>⌘${i + 1}</kbd>
+      </div>`).join("") : `<div class="empty">Nothing matches “${esc(pInput.value)}”. Try a browser, profile or email.</div>`;
+    pMain.innerHTML = shown.length ? `Open in ${shown[sel].t.replace("Google ", "")} <kbd>↩</kbd>` : `Nothing to open`;
+  }
+  pInput.addEventListener("input", () => { sel = 0; renderPicker(); });
+  pInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { sel = Math.min(sel + 1, shown.length - 1); renderPicker(); e.preventDefault(); }
+    if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); renderPicker(); e.preventDefault(); }
+    if (e.key === "Escape") { pInput.value = ""; sel = 0; renderPicker(); }
+  });
+  pList.addEventListener("click", (e) => { const o = e.target.closest(".opt"); if (o) { sel = +o.dataset.i; renderPicker(); } });
+  renderPicker();
+
+  /* ---------- Cleaner ---------- */
+  const CLEAN = [
+    { tab: "Outlook Safe Link", url: "https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdocs.example.com%2Fhandbook%3Futm_campaign%3Dq4&data=05%7C02&reserved=0" },
+    { tab: "YouTube share", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&si=Hx81kWq_share&is=ab12" },
+    { tab: "Newsletter", url: "https://shop.example.com/sale?utm_source=newsletter&utm_medium=email&mc_eid=8f1a&color=blue" },
+    { tab: "Google result", url: "https://www.google.com/url?q=https://en.wikipedia.org/wiki/Hypertext&sa=U&ved=2ah" },
+  ];
+  const cEx = $("#clean-examples"), cBefore = $("#clean-before"), cAfter = $("#clean-after"), cWhy = $("#clean-why");
+  function showClean(i) {
+    [...cEx.children].forEach((b, j) => b.setAttribute("aria-pressed", i === j));
+    const res = clean(CLEAN[i].url);
+    cBefore.innerHTML = markUrl(CLEAN[i].url, res);
+    cAfter.textContent = res.final.href;
+    cWhy.innerHTML = (res.unwrapped ? [`<span class="pill violet">#unwrapped redirect</span>`] : [])
+      .concat(res.removed.map((k) => `<span class="pill pink">#removed ${esc(k)}</span>`)).join("");
+  }
+  CLEAN.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = c.tab;
+    b.addEventListener("click", () => showClean(i));
+    cEx.appendChild(b);
+  });
+  showClean(0);
+
+  /* ---------- Rule editor switch ---------- */
+  const sw = $("#private-switch");
+  sw.addEventListener("click", () => sw.setAttribute("aria-checked", sw.getAttribute("aria-checked") !== "true"));
+})();
+</script>
+</body>
+</html>
